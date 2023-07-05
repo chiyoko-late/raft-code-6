@@ -23,13 +23,17 @@
 #define SERVER_ADDR "0.0.0.0"
 #define STRING (10LL)
 #define ALL_ACCEPTED_ENTRIES (10000L * 250)
-#define ENTRY_NUM (5LL)
+// #define ENTRY_NUM (5LL)
+int ENTRY_NUM = 10000L;
 
 // using namespace std;
+// while (true)
+// 転送サイズを10倍にする
+// if (性能改善) さらに10倍
+// else 性能を1/10 して break
 
 // int STRING = 100;
 // int ALL_ACCEPTED_ENTRIES = 10000;
-// int ENTRY_NUM = 10000;
 
 uint64_t c1,
     c2;

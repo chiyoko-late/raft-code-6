@@ -67,7 +67,6 @@ int main(int argc, char *argv[])
 
         // printf("%d回目\n", i);
         /* leaderに送る */
-
         for (int i = 0; i < ENTRY_NUM; i++)
         {
             my_send(sock, str, sizeof(char) * STRING);
@@ -76,7 +75,6 @@ int main(int argc, char *argv[])
         if (result != 1)
         {
             // printf("commit\n");
-
             printf("There is something error!!\n");
         }
         i++;

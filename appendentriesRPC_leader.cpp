@@ -11,6 +11,7 @@ struct AppendEntriesRPC_Argument *AERPC_A = new struct AppendEntriesRPC_Argument
 struct AllServer_PersistentState *AS_PS = new struct AllServer_PersistentState;
 struct AllServer_VolatileState *AS_VS = new struct AllServer_VolatileState;
 struct Leader_VolatileState *L_VS = new struct Leader_VolatileState;
+struct append_entry arry[ALL_ACCEPTED_ENTRIES];
 
 void AppendEntriesRPC(int i)
 {
@@ -18,7 +19,6 @@ void AppendEntriesRPC(int i)
     // printf("---%d---\n", i);
 
     /* AERPC_Aの設定 */
-
     AERPC_A->term = AS_PS->currentTerm;
     AERPC_A->prevLogIndex = AS_PS->log.index - 1;
     AERPC_A->prevLogTerm = AS_PS->log.term;
@@ -62,6 +62,23 @@ void AppendEntriesRPC(int i)
 
 void worker(int &sock_client, int &connectserver_num)
 {
+
+    // ----ここではclientをなくす場合に、leaderが所持するentryを作成している
+    char a[STRING];
+    printf("entry -> ");
+
+    fgets(a, STRING, stdin);
+
+    for (int i = 0; i < ALL_ACCEPTED_ENTRIES; i++)
+    {
+        for (int k = 0; k < STRING; k++)
+        {
+            arry[i].entry[k] = a[k];
+        }
+    }
+    // -----
+
+    clock_gettime(CLOCK_MONOTONIC, &ts1);
     for (int i = 0; i < (ALL_ACCEPTED_ENTRIES / ENTRY_NUM); i++)
     {
         printf("i = %d\n", i);
@@ -70,8 +87,13 @@ void worker(int &sock_client, int &connectserver_num)
         // clock_gettime(CLOCK_MONOTONIC, &ts1);
         for (int k = 0; k < ENTRY_NUM; k++)
         {
-            // clientから受け取り
-            my_recv(sock_client, &AS_PS->log.entries[k], sizeof(char) * STRING);
+            // clientから受け取り→もうすでに受け取って配列でleaderが持っていることにする。それを読む。
+            // my_recv(sock_client, &AS_PS->log.entries[k], sizeof(char) * STRING);
+            for (int j = 0; j < STRING; j++)
+            {
+                AS_PS->log.entries[k].entry[j] = arry[k + (ENTRY_NUM * i)].entry[j];
+            }
+            // printf("%s", AS_PS->log.entries[k].entry);
         }
 
         AS_PS->log.term = AS_PS->currentTerm;
@@ -98,14 +120,14 @@ void worker(int &sock_client, int &connectserver_num)
             AS_VS->commitIndex += 1;
             result = 1;
         }
-        my_send(sock_client, &result, sizeof(int) * 1);
-
-        // clock_gettime(CLOCK_MONOTONIC, &ts2);
-        t = ts2.tv_sec - ts1.tv_sec + (ts2.tv_nsec - ts1.tv_nsec) / 1e9;
-
-        // fprintf(timerec, "%.4f\n", t);
-        // printf("%.4f\n", t);
+        // my_send(sock_client, &result, sizeof(int) * 1);
+        // printf("return commit\n");
     }
+    clock_gettime(CLOCK_MONOTONIC, &ts2);
+    t = ts2.tv_sec - ts1.tv_sec + (ts2.tv_nsec - ts1.tv_nsec) / 1e9;
+
+    // fprintf(timerec, "%.4f\n", t);
+    printf("%.4f\n", t);
 }
 
 int main(int argc, char *argv[])
@@ -170,7 +192,7 @@ int main(int argc, char *argv[])
     // ソケット作成
     // int sock[3];
     struct sockaddr_in addr[3];
-    for (int i = 0; i < 3; i++)
+    for (int i = 1; i < 3; i++)
     {
         sock[i] = socket(AF_INET, SOCK_STREAM, 0);
         if (sock[i] < 0)
@@ -181,11 +203,11 @@ int main(int argc, char *argv[])
         memset(&addr[i], 0, sizeof(struct sockaddr_in));
     }
     /* サーバーのIPアドレスとポートの情報を設定 */
-    // client
-    addr[0].sin_family = AF_INET;
-    addr[0].sin_port = htons(port[0]);
-    addr[0].sin_addr.s_addr = htonl(INADDR_ANY);
-    const size_t addr_size = sizeof(addr[0]);
+    // // client
+    // addr[0].sin_family = AF_INET;
+    // addr[0].sin_port = htons(port[0]);
+    // addr[0].sin_addr.s_addr = htonl(INADDR_ANY);
+    // const size_t addr_size = sizeof(addr[0]);
 
     // follower
     for (int i = 1; i < 3; i++)
@@ -198,7 +220,7 @@ int main(int argc, char *argv[])
 
     int opt = 1;
     // ポートが解放されない場合, SO_REUSEADDRを使う
-    for (int i = 0; i < 3; i++)
+    for (int i = 1; i < 3; i++)
     {
         if (setsockopt(sock[i], SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt)) == -1)
         {
@@ -208,22 +230,22 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (bind(sock[0], (struct sockaddr *)&addr[0], addr_size) == -1)
-    {
-        perror("bind error ");
-        close(sock[0]);
-        exit(0);
-    }
-    printf("bind port=%d\n", port[0]);
+    // if (bind(sock[0], (struct sockaddr *)&addr[0], addr_size) == -1)
+    // {
+    //     perror("bind error ");
+    //     close(sock[0]);
+    //     exit(0);
+    // }
+    // printf("bind port=%d\n", port[0]);
 
     // クライアントのコネクション待ち状態は最大10
-    if (listen(sock[0], 10) == -1)
-    {
-        perror("listen error ");
-        close(sock[0]);
-        exit(0);
-    }
-    printf("listen success!\n");
+    // if (listen(sock[0], 10) == -1)
+    // {
+    //     perror("listen error ");
+    //     close(sock[0]);
+    //     exit(0);
+    // }
+    // printf("listen success!\n");
 
     // /* followerとconnect */
 
@@ -257,35 +279,34 @@ int main(int argc, char *argv[])
     int sock_client = 0;
     char *buffer = (char *)malloc(32 * 1024 * 1024);
 
-ACCEPT:
-    // 接続が切れた場合, acceptからやり直す
-    printf("last_id=%d\n", last_id);
-    int old_sock_client = sock_client;
-    struct sockaddr_in accept_addr = {
-        0,
-    };
-    socklen_t accpet_addr_size = sizeof(accept_addr);
-    sock_client = accept(sock[0], (struct sockaddr *)&accept_addr, &accpet_addr_size);
-    printf("sock_client=%d\n", sock_client);
-    if (sock_client == 0 || sock_client < 0)
-    {
-        perror("accept error ");
-        exit(0);
-    }
-    printf("succeed in conecting with client!\n");
-    // ここで一回送って接続数確認に使う
-    int k = 7;
-    my_send(sock_client, &k, sizeof(int) * 1);
-    if (old_sock_client > 0)
-    {
-        close(old_sock_client);
-    }
-    my_recv(sock_client, &k, sizeof(int) * 1);
-    printf("%d\n", k);
+    // ACCEPT:
+    //     // 接続が切れた場合, acceptからやり直す
+    //     printf("last_id=%d\n", last_id);
+    //     int old_sock_client = sock_client;
+    //     struct sockaddr_in accept_addr = {
+    //         0,
+    //     };
+    //     socklen_t accpet_addr_size = sizeof(accept_addr);
+    //     sock_client = accept(sock[0], (struct sockaddr *)&accept_addr, &accpet_addr_size);
+    //     printf("sock_client=%d\n", sock_client);
+    //     if (sock_client == 0 || sock_client < 0)
+    //     {
+    //         perror("accept error ");
+    //         exit(0);
+    //     }
+    //     printf("succeed in conecting with client!\n");
+    //     // ここで一回送って接続数確認に使う
+    //     int k = 7;
+    //     my_send(sock_client, &k, sizeof(int) * 1);
+    //     if (old_sock_client > 0)
+    //     {
+    //         close(old_sock_client);
+    //     }
+    //     my_recv(sock_client, &k, sizeof(int) * 1);
+    //     printf("%d\n", k);
 
     std::thread t1(worker, std::ref(sock_client), std::ref(connectserver_num));
     t1.join();
-
     /* 接続済のソケットでデータのやり取り */
     // for (int i = 0; i < (ALL_ACCEPTED_ENTRIES / ENTRY_NUM) - 1; i++)
     // {
@@ -332,22 +353,22 @@ ACCEPT:
     //     // printf("%.4f\n", t);
     // }
 
-    while (true)
-    {
-        ae_req_t ae_req;
+    // while (true)
+    // {
+    //     ae_req_t ae_req;
 
-        if (my_recv(sock_client, &ae_req, sizeof(ae_req_t)))
-            goto ACCEPT;
-        if (my_recv(sock_client, buffer, ae_req.size))
-            goto ACCEPT;
+    //     if (my_recv(sock_client, &ae_req, sizeof(ae_req_t)))
+    //         goto ACCEPT;
+    //     if (my_recv(sock_client, buffer, ae_req.size))
+    //         goto ACCEPT;
 
-        ae_res_t ae_res;
-        ae_res.id = last_id = ae_req.id;
-        ae_res.status = 0;
+    //     ae_res_t ae_res;
+    //     ae_res.id = last_id = ae_req.id;
+    //     ae_res.status = 0;
 
-        if (my_send(sock_client, &ae_res, sizeof(ae_res_t)))
-            goto ACCEPT;
-    }
-    printf("logは上限です");
+    //     if (my_send(sock_client, &ae_res, sizeof(ae_res_t)))
+    //         goto ACCEPT;
+    // }
+    printf("全部複製した\n");
     return 0;
 }
